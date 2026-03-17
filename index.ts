@@ -1,11 +1,11 @@
 type InputEventId = PointerEvent['pointerId'] | KeyboardEvent['code']
 
 export interface PointerState {
-    button1: boolean,
-    button2: boolean,
-    button3: boolean,
-    button4: boolean,
-    button5: boolean,
+    button1: boolean
+    button2: boolean
+    button3: boolean
+    button4: boolean
+    button5: boolean
     screenX: number
     screenY: number
     clientX: number
@@ -92,7 +92,24 @@ const asyncEvent = <T>(eventName: string, idType: NumberConstructor | StringCons
 }
 
 const root = document.documentElement
+const keyboardSet: Set<KeyboardEvent['code']> = new Set
 const pointerStateMap: Map<PointerEvent['pointerId'], PointerState> = new Map
+
+const updateKeyboardState = (event: KeyboardEvent) => {
+    if (event.code === undefined) return
+
+    let button = true
+
+    if (event.type === 'keydown')
+        keyboardSet.add(event.code)
+    else if (event.type === 'keyup') {
+        button = false
+
+        keyboardSet.delete(event.code)
+    }
+
+    return button
+}
 
 const updatePointerState = (event: PointerEvent) => {
     const {
@@ -151,24 +168,6 @@ const updatePointerState = (event: PointerEvent) => {
     return pointerState
 }
 
-const keyboardMap: Map<KeyboardEvent['code'], true> = new Map
-
-const updateKeyboardState = (event: KeyboardEvent) => {
-    if (event.code === undefined) return
-
-    let button = true
-
-    if (event.type === 'keydown')
-        keyboardMap.set(event.code, button)
-    else if (event.type === 'keyup') {
-        button = false
-
-        keyboardMap.delete(event.code)
-    }
-
-    return button
-}
-
 const eventListener: EventListener = (event: PointerEvent | KeyboardEvent) => {
     let id: InputEventId
     let data: PointerState | boolean
@@ -195,19 +194,68 @@ const eventListener: EventListener = (event: PointerEvent | KeyboardEvent) => {
     }
 }
 
+root.addEventListener('keydown', eventListener, true)
+root.addEventListener('keypress', eventListener, true)
+root.addEventListener('keyup', eventListener, true)
 root.addEventListener('pointerenter', eventListener, true)
 root.addEventListener('pointerdown', eventListener, true)
 root.addEventListener('pointermove', eventListener, true)
 root.addEventListener('pointerup', eventListener, true)
 root.addEventListener('click', eventListener, true)
 root.addEventListener('pointerleave', eventListener, true)
-root.addEventListener('keydown', eventListener, true)
-root.addEventListener('keypress', eventListener, true)
-root.addEventListener('keyup', eventListener, true)
 
-export const getPointerState = (id: PointerEvent['pointerId']) => pointerStateMap.get(id) || null
+export const getKeyboardButtons = <T extends KeyboardEvent['code'][]>(...codeArray: T): T['length'] extends 1 ? boolean : boolean[] => {
+    if (codeArray.length === 1) {
+        return keyboardSet.has(codeArray[0]) as any
+    } else {
+        const buttons: boolean[] = []
 
-export const getKeyboardButton = (code: KeyboardEvent['code']) => keyboardMap.get(code) || false
+        for (let i = 0; i < codeArray.length; i++) {
+            buttons.push(keyboardSet.has(codeArray[i]))
+        }
+
+        return buttons as any
+    }
+}
+
+export const getKeyboardState = () => new Set(keyboardSet)
+
+export const getPointerStates = <T extends PointerEvent['pointerId'][]>(...idArray: T): T['length'] extends 1 ? PointerState : PointerState[] => {
+    if (idArray.length === 1) {
+        const pointerState = pointerStateMap.get(idArray[0])
+
+        return pointerState ? { ...pointerState } as any : null
+    } else {
+        const states: PointerState[] = []
+
+        for (let i = 0; i < idArray.length; i++) {
+            const pointerState = pointerStateMap.get(idArray[i])
+
+            states.push(pointerState? { ...pointerState } : null)
+        }
+
+        return states as any
+    }
+}
+
+export const getPointerStateMap = () => {
+    const copyMap: typeof pointerStateMap = new Map
+
+    for (const [id, state] of pointerStateMap) {
+        copyMap.set(id, { ...state })
+    }
+
+    return copyMap
+}
+
+export const asyncKeydown = (code: KeyboardEvent['code'], signal?: AbortSignal) =>
+    asyncEvent<boolean>('keydown', String, code, signal)
+
+export const asyncKeypress = (code: KeyboardEvent['code'], signal?: AbortSignal) =>
+    asyncEvent<boolean>('keypress', String, code, signal)
+
+export const asyncKeyup = (code: KeyboardEvent['code'], signal?: AbortSignal) =>
+    asyncEvent<boolean>('keyup', String, code, signal)
 
 export const asyncPointerenter = (id: PointerEvent['pointerId'], signal?: AbortSignal) =>
     asyncEvent<PointerState>('pointerenter', Number, id, signal)
@@ -226,12 +274,3 @@ export const asyncClick = (id: PointerEvent['pointerId'], signal?: AbortSignal) 
 
 export const asyncPointerleave = (id: PointerEvent['pointerId'], signal?: AbortSignal) =>
     asyncEvent<PointerState>('pointerleave', Number, id, signal)
-
-export const asyncKeydown = (code: KeyboardEvent['code'], signal?: AbortSignal) =>
-    asyncEvent<boolean>('keydown', String, code, signal)
-
-export const asyncKeypress = (code: KeyboardEvent['code'], signal?: AbortSignal) =>
-    asyncEvent<boolean>('keypress', String, code, signal)
-
-export const asyncKeyup = (code: KeyboardEvent['code'], signal?: AbortSignal) =>
-    asyncEvent<boolean>('keyup', String, code, signal)
